@@ -10,3 +10,6 @@ torre-admin/node_modules/
 torre-admin/node_modules/ 
 torre-admin-web/node_modules/ 
 torre-admin-web/dist/ 
+torre-admin/data/torre.sqlite 
+torre-admin/data/torre.sqlite-shm 
+torre-admin/data/torre.sqlite-wal 

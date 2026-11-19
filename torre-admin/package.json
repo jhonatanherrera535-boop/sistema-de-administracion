@@ -7,8 +7,8 @@
   "author": "Tu nombre",
   "license": "ISC",
   "dependencies": {
+    "@sqlitecloud/drivers": "^1.0.982",
     "bcrypt": "^6.0.0",
-    "better-sqlite3": "^13.2.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^18.0.10",
