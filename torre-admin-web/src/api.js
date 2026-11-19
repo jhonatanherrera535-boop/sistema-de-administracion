@@ -1,4 +1,7 @@
-const API_BASE = '/api';
+// En desarrollo (local): usa '/api' para que Vite lo redirija al proxy
+// En producción (Vercel): usa VITE_API_URL (la URL de Render)
+const API_ORIGIN = import.meta.env.VITE_API_URL || 'https://sistema-de-administracion.onrender.com/';
+const API_BASE = API_ORIGIN ? `${API_ORIGIN}/api` : '/api';
 
 async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -39,9 +42,10 @@ export const api = {
   },
 };
 
-// El navegador resolverá las rutas relativas contra el origen actual.
+// Para URLs de archivos (comprobantes, etc.)
 export const assetUrl = (path) => {
   if (!path) return null;
   if (path.startsWith('http')) return path;
-  return path; // El navegador lo resolverá contra el origen actual (el proxy de Vite)
+  // En producción, antepone el origen del backend
+  return API_ORIGIN ? `${API_ORIGIN}${path}` : path;
 };
