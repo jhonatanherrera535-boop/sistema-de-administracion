@@ -7,6 +7,34 @@ router.use(requireAuth, requireAdmin); // todas las rutas requieren admin por ah
 
 const VALID_MODES = new Set(['none', 'percent', 'fixed']);
 
+function exec(sql) {
+  return new Promise((resolve, reject) => {
+    db.exec(sql, (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+}
+
+async function executeTransaction(statements) {
+  try {
+    await exec(['BEGIN IMMEDIATE;', ...statements.map((statement) => `${statement};`), 'COMMIT;'].join('\n'));
+  } catch (err) {
+    try {
+      await exec('ROLLBACK;');
+    } catch (rollbackError) {
+      console.error('Error revirtiendo la transacción:', rollbackError);
+    }
+    throw err;
+  }
+}
+
+function isConstraintError(err) {
+  const codes = [err.code, err.errorCode, err.externalErrorCode].map(Number);
+  return codes.some((code) => Number.isInteger(code) && (code === 19 || code % 256 === 19))
+    || /constraint/i.test(err.message || '');
+}
+
 function validatePayload({ year, month, reserve_mode, reserve_value }) {
   if (!Number.isInteger(year) || year < 2000 || year > 2100) return 'year inválido';
   if (!Number.isInteger(month) || month < 1 || month > 12) return 'month inválido (1-12)';
@@ -25,33 +53,37 @@ function validatePayload({ year, month, reserve_mode, reserve_value }) {
 }
 
 // LISTAR todos los períodos
-router.get('/', (req, res) => {
-  const rows = db.prepare(`
+router.get('/', async (req, res) => {
+  const rows = await db.sql(`
     SELECT id, year, month, status, reserve_mode, reserve_value,
            total_expenses_cents, reserve_contribution_cents,
            charge_per_apartment_cents, active_apartments_count, closed_at
     FROM periods
     ORDER BY year DESC, month DESC
-  `).all();
+  `);
   res.json({ periods: rows });
 });
 
 // CREAR período
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { year, month, reserve_mode = 'none', reserve_value = 0 } = req.body || {};
   const err = validatePayload({ year, month, reserve_mode, reserve_value });
   if (err) return res.status(400).json({ error: err });
 
   try {
-    const info = db.prepare(`
-      INSERT INTO periods (year, month, reserve_mode, reserve_value)
-      VALUES (?, ?, ?, ?)
-    `).run(year, month, reserve_mode, reserve_value);
+    await db.sql(`
+      INSERT INTO periods (
+        year, month, status, reserve_mode, reserve_value, total_expenses_cents,
+        reserve_contribution_cents, charge_per_apartment_cents, active_apartments_count
+      )
+      VALUES (?, ?, 'open', ?, ?, 0, 0, 0, 0)
+    `, year, month, reserve_mode, reserve_value);
 
-    const period = db.prepare('SELECT * FROM periods WHERE id = ?').get(info.lastInsertRowid);
+    const periods = await db.sql('SELECT * FROM periods WHERE year = ? AND month = ?', year, month);
+    const period = periods[0];
     res.status(201).json({ period });
   } catch (e) {
-    if (String(e.code).includes('CONSTRAINT')) {
+    if (isConstraintError(e)) {
       return res.status(409).json({
         error: `Ya existe el período ${year}-${String(month).padStart(2, '0')}`,
       });
@@ -62,30 +94,34 @@ router.post('/', (req, res) => {
 });
 
 // DETALLE de un período
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'id inválido' });
 
-  const period = db.prepare('SELECT * FROM periods WHERE id = ?').get(id);
+  const periods = await db.sql('SELECT * FROM periods WHERE id = ?', id);
+  const period = periods[0];
   if (!period) return res.status(404).json({ error: 'Período no encontrado' });
 
-  const expenses = db.prepare(`
+  const expenses = await db.sql(`
     SELECT * FROM expenses WHERE period_id = ? ORDER BY date ASC, id ASC
-  `).all(id);
+  `, id);
 
-  const chargesCount = db.prepare(
-    'SELECT COUNT(*) AS c FROM charges WHERE period_id = ?'
-  ).get(id).c;
+  const chargesCounts = await db.sql(
+    'SELECT COUNT(*) AS c FROM charges WHERE period_id = ?',
+    id
+  );
+  const chargesCount = chargesCounts[0].c;
 
   res.json({ period, expenses, charges_count: chargesCount });
 });
 
 // ACTUALIZAR configuración de fondo (solo si el período está abierto)
-router.patch('/:id', (req, res) => {
+router.patch('/:id', async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'id inválido' });
 
-  const period = db.prepare('SELECT * FROM periods WHERE id = ?').get(id);
+  const periods = await db.sql('SELECT * FROM periods WHERE id = ?', id);
+  const period = periods[0];
   if (!period) return res.status(404).json({ error: 'Período no encontrado' });
   if (period.status === 'closed') {
     return res.status(409).json({ error: 'El período está cerrado; no se puede editar' });
@@ -102,10 +138,15 @@ router.patch('/:id', (req, res) => {
   });
   if (err) return res.status(400).json({ error: err });
 
-  db.prepare('UPDATE periods SET reserve_mode = ?, reserve_value = ? WHERE id = ?')
-    .run(newMode, newValue, id);
+  await db.sql(
+    'UPDATE periods SET reserve_mode = ?, reserve_value = ? WHERE id = ?',
+    newMode,
+    newValue,
+    id
+  );
 
-  const updated = db.prepare('SELECT * FROM periods WHERE id = ?').get(id);
+  const updatedPeriods = await db.sql('SELECT * FROM periods WHERE id = ?', id);
+  const updated = updatedPeriods[0];
   res.json({ period: updated });
 });
 
@@ -113,28 +154,29 @@ router.patch('/:id', (req, res) => {
 // ────────────────────────────────────────────────────────
 // CIERRE DE PERÍODO — calcula y genera cuotas
 // ────────────────────────────────────────────────────────
-router.post('/:id/close', (req, res) => {
+router.post('/:id/close', async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'id inválido' });
 
-  const period = db.prepare('SELECT * FROM periods WHERE id = ?').get(id);
+  const periods = await db.sql('SELECT * FROM periods WHERE id = ?', id);
+  const period = periods[0];
   if (!period) return res.status(404).json({ error: 'Período no encontrado' });
   if (period.status === 'closed') {
     return res.status(409).json({ error: 'El período ya está cerrado' });
   }
 
   // 1) Gastos (recalculados en vivo, por si hay drift)
-  const { total } = db.prepare(
-    'SELECT COALESCE(SUM(amount_cents), 0) AS total FROM expenses WHERE period_id = ?'
-  ).get(id);
+  const totals = await db.sql(
+    'SELECT COALESCE(SUM(amount_cents), 0) AS total FROM expenses WHERE period_id = ?',
+    id
+  );
+  const total = totals[0].total;
   if (total <= 0) {
     return res.status(400).json({ error: 'No hay gastos registrados; no se puede cerrar' });
   }
 
   // 2) Deptos activos
-  const activeApts = db
-    .prepare('SELECT id FROM apartments WHERE active = 1 ORDER BY id ASC')
-    .all();
+  const activeApts = await db.sql('SELECT id FROM apartments WHERE active = 1 ORDER BY id ASC');
   const n = activeApts.length;
   if (n === 0) {
     return res.status(400).json({ error: 'No hay departamentos activos' });
@@ -153,44 +195,42 @@ router.post('/:id/close', (req, res) => {
   const base = Math.floor(amountToDistribute / n);
   const remainder = amountToDistribute - base * n; // 0..n-1 centavos
 
-  // 5) Transacción
-  const closeTxn = db.transaction(() => {
-    db.prepare('DELETE FROM charges WHERE period_id = ?').run(id);
-
-    const insertCharge = db.prepare(
-      'INSERT INTO charges (period_id, apartment_id, amount_cents) VALUES (?, ?, ?)'
+  const statements = [`DELETE FROM charges WHERE period_id = ${id}`];
+  activeApts.forEach((apt, idx) => {
+    const amount = base + (idx < remainder ? 1 : 0);
+    statements.push(
+      `INSERT INTO charges (period_id, apartment_id, amount_cents) VALUES (${id}, ${apt.id}, ${amount})`
     );
-    activeApts.forEach((apt, idx) => {
-      const amount = base + (idx < remainder ? 1 : 0);
-      insertCharge.run(id, apt.id, amount);
-    });
-
-    if (reserveContribution > 0) {
-      const label = `${period.year}-${String(period.month).padStart(2, '0')}`;
-      db.prepare(`
-        INSERT INTO fund_movements (period_id, type, amount_cents, description, date, created_by)
-        VALUES (?, 'contribution', ?, ?, date('now'), ?)
-      `).run(id, reserveContribution, `Aporte fondo ${label}`, req.user.id);
-    }
-
-    db.prepare(`
-      UPDATE periods
-      SET status = 'closed',
-          total_expenses_cents = ?,
-          reserve_contribution_cents = ?,
-          charge_per_apartment_cents = ?,
-          active_apartments_count = ?,
-          closed_at = datetime('now')
-      WHERE id = ?
-    `).run(total, reserveContribution, base, n, id);
   });
 
+  if (reserveContribution > 0) {
+    const label = `${period.year}-${String(period.month).padStart(2, '0')}`;
+    statements.push(`
+      INSERT INTO fund_movements (period_id, type, amount_cents, description, date, created_by)
+      VALUES (${id}, 'contribution', ${reserveContribution}, 'Aporte fondo ${label}', date('now'), ${req.user.id})
+    `);
+  }
+
+  statements.push(`
+    UPDATE periods
+    SET status = 'closed',
+        total_expenses_cents = ${total},
+        reserve_contribution_cents = ${reserveContribution},
+        charge_per_apartment_cents = ${base},
+        active_apartments_count = ${n},
+        closed_at = datetime('now')
+    WHERE id = ${id}
+  `);
+
   try {
-    closeTxn();
-    const updated = db.prepare('SELECT * FROM periods WHERE id = ?').get(id);
-    const charges = db.prepare(
-      'SELECT COUNT(*) AS c FROM charges WHERE period_id = ?'
-    ).get(id).c;
+    await executeTransaction(statements);
+    const updatedPeriods = await db.sql('SELECT * FROM periods WHERE id = ?', id);
+    const updated = updatedPeriods[0];
+    const chargeCounts = await db.sql(
+      'SELECT COUNT(*) AS c FROM charges WHERE period_id = ?',
+      id
+    );
+    const charges = chargeCounts[0].c;
 
     res.json({
       ok: true,
@@ -216,14 +256,15 @@ router.post('/:id/close', (req, res) => {
 // ────────────────────────────────────────────────────────
 // LISTAR CUOTAS DE UN PERÍODO
 // ────────────────────────────────────────────────────────
-router.get('/:id/charges', (req, res) => {
+router.get('/:id/charges', async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'id inválido' });
 
-  const period = db.prepare('SELECT * FROM periods WHERE id = ?').get(id);
+  const periods = await db.sql('SELECT * FROM periods WHERE id = ?', id);
+  const period = periods[0];
   if (!period) return res.status(404).json({ error: 'Período no encontrado' });
 
-  const charges = db.prepare(`
+  const charges = await db.sql(`
     SELECT c.id, c.amount_cents, c.status,
            a.id AS apartment_id, a.number AS apartment_number, a.floor,
            COALESCE((
@@ -240,7 +281,7 @@ router.get('/:id/charges', (req, res) => {
     JOIN apartments a ON a.id = c.apartment_id
     WHERE c.period_id = ?
     ORDER BY a.floor ASC, a.number ASC
-  `).all(id);
+  `, id);
 
   const totalBilled = charges.reduce((sum, charge) => sum + charge.amount_cents, 0);
   const totalPaid = charges.reduce((sum, charge) => sum + charge.paid_cents, 0);
@@ -266,44 +307,42 @@ router.get('/:id/charges', (req, res) => {
 // ────────────────────────────────────────────────────────
 // REABRIR PERÍODO (corrección, borra cuotas y aporte)
 // ────────────────────────────────────────────────────────
-router.post('/:id/reopen', (req, res) => {
+router.post('/:id/reopen', async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'id inválido' });
 
-  const period = db.prepare('SELECT * FROM periods WHERE id = ?').get(id);
+  const periods = await db.sql('SELECT * FROM periods WHERE id = ?', id);
+  const period = periods[0];
   if (!period) return res.status(404).json({ error: 'Período no encontrado' });
   if (period.status === 'open') {
     return res.status(400).json({ error: 'El período ya está abierto' });
   }
 
-  const paymentsCount = db.prepare(
-    'SELECT COUNT(*) AS c FROM payments WHERE period_id = ?'
-  ).get(id).c;
+  const paymentCounts = await db.sql(
+    'SELECT COUNT(*) AS c FROM payments WHERE period_id = ?',
+    id
+  );
+  const paymentsCount = paymentCounts[0].c;
   if (paymentsCount > 0) {
     return res.status(409).json({
       error: 'Hay pagos registrados en este período; no se puede reabrir',
     });
   }
 
-  const reopenTxn = db.transaction(() => {
-    db.prepare('DELETE FROM charges WHERE period_id = ?').run(id);
-    db.prepare(
-      "DELETE FROM fund_movements WHERE period_id = ? AND type = 'contribution'"
-    ).run(id);
-    db.prepare(`
-      UPDATE periods
-      SET status = 'open',
-          reserve_contribution_cents = 0,
-          charge_per_apartment_cents = 0,
-          active_apartments_count = 0,
-          closed_at = NULL
-      WHERE id = ?
-    `).run(id);
-  });
-
   try {
-    reopenTxn();
-    const updated = db.prepare('SELECT * FROM periods WHERE id = ?').get(id);
+    await executeTransaction([
+      `DELETE FROM charges WHERE period_id = ${id}`,
+      `DELETE FROM fund_movements WHERE period_id = ${id} AND type = 'contribution'`,
+      `UPDATE periods
+       SET status = 'open',
+           reserve_contribution_cents = 0,
+           charge_per_apartment_cents = 0,
+           active_apartments_count = 0,
+           closed_at = NULL
+       WHERE id = ${id}`,
+    ]);
+    const updatedPeriods = await db.sql('SELECT * FROM periods WHERE id = ?', id);
+    const updated = updatedPeriods[0];
     res.json({ ok: true, period: updated });
   } catch (err) {
     console.error(err);

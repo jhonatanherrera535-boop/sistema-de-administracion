@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api';
 import Layout from '../../components/Layout';
+import EnableNotifications from '../../components/EnableNotifications';
 import Button from '../../components/ui/Button';
 import StatusCard from '../../components/ui/StatusCard';
 import { useAuth } from '../../context/AuthContext';
@@ -120,6 +121,10 @@ export default function AdminDashboard() {
           icon="clock"
           tone="red"
         />
+      </div>
+
+      <div className="mb-4">
+        <EnableNotifications />
       </div>
 
       {showForm && (

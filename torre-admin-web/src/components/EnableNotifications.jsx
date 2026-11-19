@@ -5,26 +5,30 @@ import {
   enablePushNotifications,
   disablePushNotifications,
 } from '../utils/push';
-import Button from './ui/Button';
-import StatusCard from './ui/StatusCard';
 
 export default function EnableNotifications() {
-  const [state, setState] = useState('unknown'); // unknown | unsupported | off | on | working
+  const [state, setState] = useState('loading'); // loading | unsupported | denied | off | on | working
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    (async () => {
-      if (!pushSupported()) {
-        setState('unsupported');
-        return;
-      }
-      if (Notification.permission === 'denied') {
-        setState('denied');
-        return;
-      }
+  const refreshState = async () => {
+    if (!pushSupported()) {
+      setState('unsupported');
+      return;
+    }
+    if (Notification.permission === 'denied') {
+      setState('denied');
+      return;
+    }
+    try {
       const sub = await getExistingSubscription();
       setState(sub ? 'on' : 'off');
-    })();
+    } catch {
+      setState('off');
+    }
+  };
+
+  useEffect(() => {
+    refreshState();
   }, []);
 
   const handleEnable = async () => {
@@ -35,7 +39,7 @@ export default function EnableNotifications() {
       setState('on');
     } catch (err) {
       setError(err.message);
-      setState('off');
+      await refreshState();
     }
   };
 
@@ -51,16 +55,28 @@ export default function EnableNotifications() {
     }
   };
 
-  if (state === 'unknown') return null;
-  if (state === 'unsupported') return null;
-  if (state === 'denied') {
+  // Mientras carga, no muestra nada (evita parpadeo)
+  if (state === 'loading') return null;
+
+  // Navegador sin soporte
+  if (state === 'unsupported') {
     return (
-      <StatusCard type="warning" title="Notificaciones bloqueadas" compact>
-        Habilítalas desde la configuración del navegador.
-      </StatusCard>
+      <div className="bg-slate-50 border border-slate-200 text-slate-600 text-xs px-3 py-2 rounded-lg">
+        Este navegador no soporta notificaciones push.
+      </div>
     );
   }
 
+  // Permiso denegado
+  if (state === 'denied') {
+    return (
+      <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2 rounded-lg">
+        Notificaciones bloqueadas por el navegador. Actívalas desde el candado 🔒 junto a la URL.
+      </div>
+    );
+  }
+
+  // Estado 'on' u 'off': SIEMPRE muestra el botón
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between gap-3">
       <div className="min-w-0">
@@ -70,24 +86,19 @@ export default function EnableNotifications() {
             ? 'Activadas en este navegador.'
             : 'Recibe avisos aunque no tengas la página abierta.'}
         </p>
-        {error && (
-          <StatusCard type="error" compact className="mt-2">
-            {error}
-          </StatusCard>
-        )}
+        {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
       </div>
-      <Button
+      <button
         onClick={state === 'on' ? handleDisable : handleEnable}
         disabled={state === 'working'}
-        variant={state === 'on' ? 'secondary' : 'primary'}
-        className="whitespace-nowrap"
+        className={`text-sm font-medium px-4 py-2 rounded-lg whitespace-nowrap transition-colors ${
+          state === 'on'
+            ? 'border border-slate-300 hover:bg-slate-50 text-slate-700'
+            : 'bg-blue-600 hover:bg-blue-700 text-white'
+        } disabled:opacity-50`}
       >
-        {state === 'working'
-          ? '...'
-          : state === 'on'
-            ? 'Desactivar'
-            : 'Activar'}
-      </Button>
+        {state === 'working' ? 'Procesando...' : state === 'on' ? 'Desactivar' : 'Activar'}
+      </button>
     </div>
   );
 }

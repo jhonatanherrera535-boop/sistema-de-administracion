@@ -32,7 +32,8 @@ export async function registerServiceWorker() {
 // ¿Ya hay una suscripción activa en este navegador?
 export async function getExistingSubscription() {
   if (!pushSupported()) return null;
-  const reg = await navigator.serviceWorker.ready;
+  const reg = await navigator.serviceWorker.getRegistration();
+  if (!reg) return null;
   return reg.pushManager.getSubscription();
 }
 
@@ -55,7 +56,10 @@ export async function enablePushNotifications() {
   }
 
   // 3. Suscribir con el pushManager
-  const reg = await navigator.serviceWorker.ready;
+  const reg = await registerServiceWorker();
+  if (!reg) {
+    throw new Error('No se pudo registrar el servicio de notificaciones en este navegador');
+  }
   let subscription = await reg.pushManager.getSubscription();
 
   if (!subscription) {

@@ -13,13 +13,17 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Faltan email o password' });
     }
 
-    const user = db.prepare(`
+    const users = await db.sql(`
       SELECT u.*, a.number AS apartment_number
       FROM users u
       LEFT JOIN apartments a ON a.id = u.apartment_id
       WHERE u.email = ? AND u.active = 1
-    `).get(email.toLowerCase().trim());
+    `, email.toLowerCase().trim());
+    const user = users[0];
     if (!user) return res.status(401).json({ error: 'Credenciales inválidas' });
+    if (typeof user.password_hash !== 'string' || !user.password_hash) {
+      throw new Error(`User ${user.id} has no password hash`);
+    }
 
     const ok = await verifyPassword(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: 'Credenciales inválidas' });
@@ -65,7 +69,8 @@ router.patch('/password', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 8 caracteres' });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    const users = await db.sql('SELECT * FROM users WHERE id = ?', req.user.id);
+    const user = users[0];
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
 
     // Si ya cambió su contraseña alguna vez, exigimos la actual
@@ -78,8 +83,11 @@ router.patch('/password', requireAuth, async (req, res) => {
     }
 
     const hash = await hashPassword(new_password);
-    db.prepare('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?')
-      .run(hash, user.id);
+    await db.sql(
+      'UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?',
+      hash,
+      user.id
+    );
 
     res.json({ ok: true });
   } catch (err) {
@@ -89,14 +97,15 @@ router.patch('/password', requireAuth, async (req, res) => {
 });
 
 // ─── INFO DEL USUARIO ACTUAL ────────────────────────────
-router.get('/me', requireAuth, (req, res) => {
-  const user = db.prepare(`
+router.get('/me', requireAuth, async (req, res) => {
+  const users = await db.sql(`
     SELECT u.id, u.email, u.name, u.phone, u.role, u.apartment_id,
            u.must_change_password, a.number AS apartment_number
     FROM users u
     LEFT JOIN apartments a ON a.id = u.apartment_id
     WHERE u.id = ?
-  `).get(req.user.id);
+  `, req.user.id);
+  const user = users[0];
   res.json({ user });
 });
 

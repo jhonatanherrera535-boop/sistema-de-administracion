@@ -9,25 +9,49 @@ if (!process.env.SQLITECLOUD_URL) {
 
 const db = new Database(process.env.SQLITECLOUD_URL);
 
-db.exec('SELECT 1');
-console.log('✅ Conectado a SQLite Cloud (torre-admin)');
-
-// Aplica el schema (idempotente gracias a IF NOT EXISTS)
 const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-db.exec(schema);
 
-// Migración: agregar columna notes si no existe.
-// El driver de SQLite Cloud no expone los resultados de PRAGMA de forma
-// síncrona igual que better-sqlite3, así que envolvemos el ALTER en try/catch
-// e ignoramos el error específico de "duplicate column name".
-try {
-  db.exec('ALTER TABLE payments ADD COLUMN notes TEXT');
-} catch (err) {
-  if (!/duplicate column name/i.test(err.message)) {
-    throw err;
-  }
+function exec(sql) {
+  return new Promise((resolve, reject) => {
+    db.exec(sql, (err) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve();
+      }
+    });
+  });
 }
+db.ready = (async () => {
+  try {
+    await exec('SELECT 1');
+    console.log('✅ Conectado a SQLite Cloud (torre-admin)');
 
-console.log('✅ Esquema verificado y migraciones aplicadas');
+    // 1. Ejecutar el esquema (crea tablas si no existen)
+    await exec(schema);
+
+    // 2. Migración segura para la columna 'notes'
+    // Ejecutamos el PRAGMA y normalizamos la respuesta para obtener un array de columnas
+    const pragmaResult = await db.sql('PRAGMA table_info(payments)');
+    
+    // El driver puede devolver un array directo o un objeto con .rows
+    const columns = Array.isArray(pragmaResult) ? pragmaResult : (pragmaResult?.rows || []);
+    
+    const notesExists = columns.some((column) => column.name === 'notes');
+
+    if (!notesExists) {
+      await db.sql('ALTER TABLE payments ADD COLUMN notes TEXT');
+      console.log('✅ Columna payments.notes agregada');
+    } else {
+      console.log('ℹ️ La columna payments.notes ya existe, no se necesita migración.');
+    }
+
+    console.log('✅ Esquema verificado y migraciones aplicadas');
+  } catch (error) {
+    console.error('❌ Error crítico inicializando la base de datos:', error);
+    // Es importante rechazar la promesa para que el servidor no arranque en un estado inconsistente
+    throw error; 
+  }
+})();
 
 module.exports = db;

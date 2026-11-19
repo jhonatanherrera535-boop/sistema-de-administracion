@@ -3,16 +3,30 @@ const db = require('../db');
 const { hashPassword } = require('../services/auth');
 
 async function main() {
+  // Esperar a que la conexión esté lista
+  await db.ready;
+
   // 1) Departamentos: 5 pisos (0 a 4) × 4 (A-D) = 20
   const letters = ['A', 'B', 'C', 'D'];
-  const insertApt = db.prepare(
-    'INSERT OR IGNORE INTO apartments (number, floor, active) VALUES (?, ?, 0)'
-  );
   let created = 0;
+
   for (let floor = 0; floor <= 4; floor++) {
     for (const letter of letters) {
-      const r = insertApt.run(`${floor}${letter}`, floor);
-      if (r.changes > 0) created++;
+      const number = `${floor}${letter}`;
+
+      // ¿Ya existe?
+      const existing = await db.sql(
+        'SELECT id FROM apartments WHERE number = ?',
+        number
+      );
+
+      if (!existing || existing.length === 0) {
+        await db.sql(
+          'INSERT INTO apartments (number, floor, active) VALUES (?, ?, 0)',
+          number, floor
+        );
+        created++;
+      }
     }
   }
   console.log(`🏢 Departamentos nuevos: ${created} (los existentes se omiten)`);
@@ -30,18 +44,27 @@ async function main() {
   }
 
   const cleanEmail = email.toLowerCase().trim();
-  if (db.prepare('SELECT id FROM users WHERE email = ?').get(cleanEmail)) {
+
+  const existingUser = await db.sql(
+    'SELECT id FROM users WHERE email = ?',
+    cleanEmail
+  );
+  if (existingUser && existingUser.length > 0) {
     console.log('ℹ️  El usuario ya existe. No se hace nada.');
     process.exit(0);
   }
 
   const hash = await hashPassword(password);
-  db.prepare(
-    `INSERT INTO users (email, password_hash, name, role) VALUES (?, ?, ?, 'admin')`
-  ).run(cleanEmail, hash, name);
+  await db.sql(
+    "INSERT INTO users (email, password_hash, name, role, active) VALUES (?, ?, ?, 'admin', 1)",
+    cleanEmail, hash, name
+  );
 
   console.log(`👤 Admin creado: ${cleanEmail}`);
   process.exit(0);
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error('❌ Error en seed:', err.message);
+  process.exit(1);
+});

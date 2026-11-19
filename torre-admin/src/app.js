@@ -58,6 +58,11 @@ app.use('/api/users', userRoutes);   // ← NUEVA
 
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
-app.listen(PORT, () => {
-  console.log(`✅ Servidor escuchando en http://localhost:${PORT}`);
+db.ready.then(() => {
+  app.listen(PORT, () => {
+    console.log(`✅ Servidor escuchando en http://localhost:${PORT}`);
+  });
+}).catch((err) => {
+  console.error('❌ Error inicializando SQLite Cloud:', err);
+  process.exitCode = 1;
 });

@@ -9,16 +9,24 @@ if (VAPID_PUBLIC && VAPID_PRIVATE) {
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
 }
 
-// Crea notificación in-app y, si hay suscripciones, envía push
 async function notify({ userId, type, title, body, link }) {
-  const info = db.prepare(`
+  // 1. INSERT de la notificación
+  const inserted = await db.sql(`
     INSERT INTO notifications (user_id, type, title, body, link)
     VALUES (?, ?, ?, ?, ?)
-  `).run(userId, type, title, body || null, link || null);
+    RETURNING id
+  `, userId, type, title, body || null, link || null);
 
+  const notificationId = inserted[0]?.id;
+
+  // 2. Enviar push si hay VAPID
   if (VAPID_PUBLIC && VAPID_PRIVATE) {
-    const subs = db.prepare('SELECT * FROM push_subscriptions WHERE user_id = ?').all(userId);
+    const subs = await db.sql(
+      'SELECT * FROM push_subscriptions WHERE user_id = ?',
+      userId
+    );
     const payload = JSON.stringify({ title, body, link, type });
+
     for (const sub of subs) {
       try {
         await webpush.sendNotification(
@@ -27,20 +35,19 @@ async function notify({ userId, type, title, body, link }) {
         );
       } catch (err) {
         if (err.statusCode === 410 || err.statusCode === 404) {
-          // Suscripción expirada → borrar
-          db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(sub.id);
+          await db.sql('DELETE FROM push_subscriptions WHERE id = ?', sub.id);
         } else {
           console.error('Push error:', err.message);
         }
       }
     }
   }
-  return info.lastInsertRowid;
+
+  return notificationId;
 }
 
-// Notifica a todos los admins activos
 async function notifyAdmins(payload) {
-  const admins = db.prepare("SELECT id FROM users WHERE role = 'admin' AND active = 1").all();
+  const admins = await db.sql("SELECT id FROM users WHERE role = 'admin' AND active = 1");
   for (const a of admins) {
     await notify({ ...payload, userId: a.id });
   }
