@@ -5,6 +5,15 @@ const { requireAuth, COOKIE_NAME } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Configuración de la cookie según el entorno
+const isProduction = process.env.NODE_ENV === 'production';
+const cookieOptions = {
+  httpOnly: true,
+  sameSite: isProduction ? 'none' : 'strict',
+  secure: isProduction,
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+};
+
 // ─── LOGIN ──────────────────────────────────────────────
 router.post('/login', async (req, res) => {
   try {
@@ -19,8 +28,10 @@ router.post('/login', async (req, res) => {
       LEFT JOIN apartments a ON a.id = u.apartment_id
       WHERE u.email = ? AND u.active = 1
     `, email.toLowerCase().trim());
+
     const user = users[0];
     if (!user) return res.status(401).json({ error: 'Credenciales inválidas' });
+
     if (typeof user.password_hash !== 'string' || !user.password_hash) {
       throw new Error(`User ${user.id} has no password hash`);
     }
@@ -29,12 +40,7 @@ router.post('/login', async (req, res) => {
     if (!ok) return res.status(401).json({ error: 'Credenciales inválidas' });
 
     const token = signToken(user);
-    res.cookie(COOKIE_NAME, token, {
-      httpOnly: true,
-      sameSite: 'strict',
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie(COOKIE_NAME, token, cookieOptions);
 
     res.json({
       ok: true,
@@ -57,7 +63,11 @@ router.post('/login', async (req, res) => {
 
 // ─── LOGOUT ─────────────────────────────────────────────
 router.post('/logout', (req, res) => {
-  res.clearCookie(COOKIE_NAME);
+  res.clearCookie(COOKIE_NAME, {
+    httpOnly: true,
+    sameSite: isProduction ? 'none' : 'strict',
+    secure: isProduction,
+  });
   res.json({ ok: true });
 });
 
@@ -98,15 +108,23 @@ router.patch('/password', requireAuth, async (req, res) => {
 
 // ─── INFO DEL USUARIO ACTUAL ────────────────────────────
 router.get('/me', requireAuth, async (req, res) => {
-  const users = await db.sql(`
-    SELECT u.id, u.email, u.name, u.phone, u.role, u.apartment_id,
-           u.must_change_password, a.number AS apartment_number
-    FROM users u
-    LEFT JOIN apartments a ON a.id = u.apartment_id
-    WHERE u.id = ?
-  `, req.user.id);
-  const user = users[0];
-  res.json({ user });
+  try {
+    const users = await db.sql(`
+      SELECT u.id, u.email, u.name, u.phone, u.role, u.apartment_id,
+             u.must_change_password, a.number AS apartment_number
+      FROM users u
+      LEFT JOIN apartments a ON a.id = u.apartment_id
+      WHERE u.id = ?
+    `, req.user.id);
+
+    const user = users[0];
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    res.json({ user });
+  } catch (err) {
+    console.error('GET /me error:', err);
+    res.status(500).json({ error: 'Error interno' });
+  }
 });
 
 module.exports = router;
