@@ -1,6 +1,6 @@
 // En desarrollo (local): usa '/api' para que Vite lo redirija al proxy
 // En producción (Vercel): usa VITE_API_URL (la URL de Render)
-const API_ORIGIN = import.meta.env.VITE_API_URL || 'https://sistema-de-administracion.onrender.com/';
+const API_ORIGIN = (import.meta.env.VITE_API_URL || 'https://sistema-de-administracion.onrender.com').replace(/\/+$/, '');
 const API_BASE = API_ORIGIN ? `${API_ORIGIN}/api` : '/api';
 
 async function request(path, options = {}) {
