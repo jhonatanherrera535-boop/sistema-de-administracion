@@ -98,7 +98,107 @@ export default function AdminResidents() {
           Agrega departamentos antes de crear cuentas para residentes.
         </StatusCard>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <>
+          <div className="space-y-3 md:hidden">
+            {data.apartments.map((apt) => {
+              const resident = data.residents.find((r) => r.apartment_id === apt.id);
+              const hasResident = !!resident;
+
+              return (
+                <article key={apt.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-slate-500">Departamento</p>
+                      <p className="font-mono font-semibold text-slate-800">{apt.number}</p>
+                    </div>
+                    <button
+                      type="button"
+                      title={`Cambiar estado del departamento ${apt.number}`}
+                      aria-label={`${apt.active ? 'Desactivar' : 'Activar'} departamento ${apt.number}`}
+                      onClick={() => handleToggleApartment(apt)}
+                      className={`inline-flex shrink-0 cursor-pointer items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
+                        apt.active
+                          ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                          : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      Depto: {apt.active ? 'Activo' : 'Inactivo'}
+                    </button>
+                  </div>
+
+                  <div className="mt-3 min-w-0 border-t border-slate-100 pt-3">
+                    {hasResident ? (
+                      <>
+                        <p className="break-words font-medium text-slate-800">{resident.name}</p>
+                        {resident.email && (
+                          <p className="mt-0.5 break-all text-sm text-slate-600">{resident.email}</p>
+                        )}
+                        {resident.phone && (
+                          <p className="mt-0.5 text-sm text-slate-500">{resident.phone}</p>
+                        )}
+                        {resident.must_change_password ? (
+                          <span className="mt-2 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800">
+                            Debe cambiar contraseña
+                          </span>
+                        ) : null}
+                      </>
+                    ) : (
+                      <p className="text-sm italic text-slate-400">Sin residente asignado</p>
+                    )}
+                  </div>
+
+                  {hasResident && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        title={`Cambiar estado de ${resident.name}`}
+                        aria-label={`${resident.active ? 'Desactivar' : 'Activar'} cuenta de ${resident.name}`}
+                        onClick={() => handleToggleActive(resident)}
+                        className={`inline-flex cursor-pointer items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
+                          resident.active
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                            : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                        }`}
+                      >
+                        Vecino: {resident.active ? 'Activo' : 'Inactivo'}
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                    {hasResident ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleResetPassword(resident)}
+                          className="min-h-10 rounded-lg border border-amber-200 px-3 text-sm font-medium text-amber-700 hover:bg-amber-50"
+                        >
+                          Resetear contraseña
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(resident)}
+                          className="min-h-10 rounded-lg border border-red-200 px-3 text-sm font-medium text-red-600 hover:bg-red-50"
+                        >
+                          Borrar
+                        </button>
+                      </>
+                    ) : (
+                      <Button
+                        onClick={() => setCreatingFor(apt)}
+                        variant="primary"
+                        className="w-full"
+                      >
+                        + Crear residente
+                      </Button>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="hidden rounded-xl border border-slate-200 bg-white shadow-sm md:block md:overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-600">
               <tr>
@@ -213,7 +313,8 @@ export default function AdminResidents() {
               })}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
 
       {creatingFor && (
@@ -262,10 +363,10 @@ function CreateResidentModal({ apartment, onClose, onCreated }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+    <div className="fixed inset-0 flex items-center justify-center overflow-y-auto bg-black/40 p-4 z-50">
       <form
         onSubmit={handleSubmit}
-        className="bg-white rounded-xl shadow-lg w-full max-w-md p-6"
+        className="my-auto max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6 shadow-lg"
       >
         <h2 className="text-lg font-bold text-slate-800 mb-1">
           Nuevo residente — Depto {apartment.number}
