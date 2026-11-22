@@ -9,6 +9,8 @@ import ResidentDashboard from './pages/resident/Dashboard';
 import ResidentAccountDetail from './pages/resident/AccountDetail';
 import AdminResidents from './pages/admin/Residents';
 import ToastProvider from './components/ui/ToastProvider';
+import AdminReport from './pages/admin/Report';   // ← nuevo
+
 
 export default function App() {
   return (
@@ -21,7 +23,8 @@ export default function App() {
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/periods/:id" element={<PeriodDetail />} />
           <Route path="/admin/payments" element={<AdminPayments />} />
-          <Route path="/admin/residents" element={<AdminResidents />} />   {/* ← NUEVA */}
+          <Route path="/admin/residents" element={<AdminResidents />} />   
+          <Route path="/admin/report" element={<AdminReport />} />   {/* ← nueva */}
         </Route>
 
         <Route element={<ProtectedRoute role="resident" />}>

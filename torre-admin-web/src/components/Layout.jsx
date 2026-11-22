@@ -72,6 +72,9 @@ export default function Layout({ children }) {
                 <NavLink to="/admin/residents" className={navLinkClass}>
                   Residentes
                 </NavLink>
+                <NavLink to="/admin/report" className={navLinkClass}>
+                  Reportes
+                </NavLink>
               </nav>
             )}
           </div>

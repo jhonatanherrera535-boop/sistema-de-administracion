@@ -408,4 +408,81 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
 });
 
+// ─── REPORTE GLOBAL: todos los deptos × todos los períodos ──
+router.get('/report', requireAdmin, async (req, res) => {
+  try {
+    const year = req.query.year ? Number(req.query.year) : null;
+
+    // 1) Períodos (filtrados por año si se indica)
+    const periodsQuery = year
+      ? 'SELECT id, year, month, status FROM periods WHERE year = ? ORDER BY year DESC, month DESC'
+      : 'SELECT id, year, month, status FROM periods ORDER BY year DESC, month DESC';
+    const periods = year
+      ? await db.sql(periodsQuery, year)
+      : await db.sql(periodsQuery);
+
+    // 2) Departamentos con residente (o sin él)
+    const apartments = await db.sql(`
+      SELECT a.id, a.number, a.floor, a.active,
+             u.id AS resident_id, u.name AS resident_name,
+             u.email AS resident_email, u.phone AS resident_phone
+      FROM apartments a
+      LEFT JOIN users u ON u.apartment_id = a.id AND u.role = 'resident'
+      ORDER BY a.floor ASC, a.number ASC
+    `);
+
+    // 3) Todos los charges con sus pagos aprobados
+    const charges = await db.sql(`
+      SELECT c.period_id, c.apartment_id, c.amount_cents, c.status,
+             COALESCE((
+               SELECT SUM(p.amount_cents) FROM payments p
+               WHERE p.period_id = c.period_id AND p.apartment_id = c.apartment_id
+                 AND p.status = 'approved'
+             ), 0) AS paid_cents
+      FROM charges c
+    `);
+
+    // 4) Indexar por "periodId_apartmentId"
+    const chargeMap = {};
+    for (const c of charges) {
+      chargeMap[`${c.period_id}_${c.apartment_id}`] = c;
+    }
+
+    // 5) Construir matriz
+    const matrix = apartments.map((apt) => {
+      const rowCharges = periods.map((p) => {
+        const c = chargeMap[`${p.id}_${apt.id}`];
+        if (!c) {
+          return { period_id: p.id, amount_cents: 0, paid_cents: 0, balance_cents: 0, status: null };
+        }
+        return {
+          period_id: p.id,
+          amount_cents: c.amount_cents,
+          paid_cents: c.paid_cents,
+          balance_cents: Math.max(0, c.amount_cents - c.paid_cents),
+          status: c.status,
+        };
+      });
+
+      const total_balance = rowCharges.reduce((s, c) => s + c.balance_cents, 0);
+      const total_billed  = rowCharges.reduce((s, c) => s + c.amount_cents, 0);
+      const total_paid    = rowCharges.reduce((s, c) => s + c.paid_cents, 0);
+
+      return { ...apt, charges: rowCharges, total_balance, total_billed, total_paid };
+    });
+
+    // 6) Resumen global
+    const summary = {
+      total_billed:  matrix.reduce((s, a) => s + a.total_billed, 0),
+      total_paid:    matrix.reduce((s, a) => s + a.total_paid, 0),
+      total_remaining: matrix.reduce((s, a) => s + a.total_balance, 0),
+    };
+
+    res.json({ periods, apartments: matrix, summary });
+  } catch (err) {
+    console.error('GET /payments/report error:', err);
+    res.status(500).json({ error: 'Error al cargar el reporte' });
+  }
+});
+
 module.exports = router;
