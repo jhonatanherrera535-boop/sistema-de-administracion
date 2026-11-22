@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import StatusCard from '../components/ui/StatusCard';
+import ThemeToggle from '../components/ThemeToggle';
 
 export default function Login() {
   const { login, user } = useAuth();
@@ -47,6 +48,7 @@ export default function Login() {
         backgroundPosition: 'center',
       }}
     >
+      <ThemeToggle className="absolute right-4 top-4 z-10" />
       {/* Capa oscura encima de la imagen para contraste */}
       <div className="absolute inset-0 bg-gradient-to-br from-slate-900/70 via-slate-900/50 to-indigo-900/60" />
 

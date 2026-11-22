@@ -1,3 +1,215 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --app-background: #f1f5f9;
+  --app-surface: #ffffff;
+  --app-surface-muted: #f8fafc;
+  --app-border: #e2e8f0;
+  --app-text: #0f172a;
+}
+
+html.dark {
+  color-scheme: dark;
+  --app-background: #0b1220;
+  --app-surface: #111c2e;
+  --app-surface-muted: #172337;
+  --app-border: #2b3a50;
+  --app-text: #e2e8f0;
+}
+
+body {
+  background-color: var(--app-background);
+  color: var(--app-text);
+}
+
+html.dark .bg-white,
+html.dark .bg-white\/85 {
+  background-color: var(--app-surface) !important;
+}
+
+html.dark .bg-slate-50,
+html.dark .bg-slate-50\/50 {
+  background-color: var(--app-surface-muted) !important;
+}
+
+html.dark .bg-slate-100 {
+  background-color: #202e42 !important;
+}
+
+html.dark .bg-slate-200 {
+  background-color: #34445a !important;
+}
+
+html.dark .bg-slate-400 {
+  background-color: #64748b !important;
+}
+
+html.dark .bg-blue-50,
+html.dark .bg-blue-50\/40,
+html.dark .bg-blue-100,
+html.dark .bg-blue-100\/60 {
+  background-color: #1b3554 !important;
+}
+
+html.dark .bg-emerald-50,
+html.dark .bg-emerald-100 {
+  background-color: #143b32 !important;
+}
+
+html.dark .bg-amber-50,
+html.dark .bg-amber-100 {
+  background-color: #453411 !important;
+}
+
+html.dark .bg-red-50,
+html.dark .bg-red-100 {
+  background-color: #48232a !important;
+}
+
+html.dark .text-slate-900,
+html.dark .text-slate-800 {
+  color: #f1f5f9 !important;
+}
+
+html.dark .text-slate-700,
+html.dark .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+html.dark .text-slate-500,
+html.dark .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+html.dark .text-slate-300 {
+  color: #64748b !important;
+}
+
+html.dark .text-blue-500,
+html.dark .text-blue-600 {
+  color: #93c5fd !important;
+}
+
+html.dark .text-blue-700 {
+  color: #bfdbfe !important;
+}
+
+html.dark .text-emerald-500,
+html.dark .text-emerald-600,
+html.dark .text-emerald-700,
+html.dark .text-emerald-800 {
+  color: #6ee7b7 !important;
+}
+
+html.dark .text-amber-700,
+html.dark .text-amber-800 {
+  color: #fcd34d !important;
+}
+
+html.dark .text-red-500,
+html.dark .text-red-600,
+html.dark .text-red-700,
+html.dark .text-red-800 {
+  color: #fca5a5 !important;
+}
+
+html.dark .border-slate-100,
+html.dark .border-slate-200,
+html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--app-border) !important;
+}
+
+html.dark .border-slate-300 {
+  border-color: #45566d !important;
+}
+
+html.dark .border-blue-100,
+html.dark .border-blue-200 {
+  border-color: #29496b !important;
+}
+
+html.dark .border-blue-300 {
+  border-color: #3b5f87 !important;
+}
+
+html.dark .border-emerald-100,
+html.dark .border-emerald-200 {
+  border-color: #245347 !important;
+}
+
+html.dark .border-amber-100,
+html.dark .border-amber-200 {
+  border-color: #665022 !important;
+}
+
+html.dark .border-red-100,
+html.dark .border-red-200 {
+  border-color: #66343d !important;
+}
+
+html.dark .hover\:bg-slate-50:hover,
+html.dark .hover\:bg-slate-100:hover {
+  background-color: #2b3a50 !important;
+}
+
+html.dark .hover\:bg-slate-200:hover {
+  background-color: #45566d !important;
+}
+
+html.dark .hover\:bg-blue-50:hover,
+html.dark .hover\:bg-blue-100:hover {
+  background-color: #26476e !important;
+}
+
+html.dark .hover\:bg-emerald-100:hover {
+  background-color: #1d5546 !important;
+}
+
+html.dark .hover\:bg-amber-50:hover,
+html.dark .hover\:bg-amber-100:hover {
+  background-color: #5a451b !important;
+}
+
+html.dark .hover\:bg-red-50:hover {
+  background-color: #48232a !important;
+}
+
+html.dark .hover\:text-slate-700:hover,
+html.dark .hover\:text-slate-800:hover {
+  color: #f1f5f9 !important;
+}
+
+html.dark .hover\:border-slate-200:hover,
+html.dark .hover\:border-slate-300:hover {
+  border-color: #50627a !important;
+}
+
+html.dark .from-white {
+  --tw-gradient-from: var(--app-surface) var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(17 28 46 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
+html.dark .via-white {
+  --tw-gradient-via: var(--app-surface) var(--tw-gradient-via-position);
+  --tw-gradient-to: rgb(17 28 46 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to);
+}
+
+html.dark .to-slate-50,
+html.dark .to-blue-50 {
+  --tw-gradient-to: #172337 var(--tw-gradient-to-position);
+}
+
+html.dark .to-red-50 {
+  --tw-gradient-to: #351c23 var(--tw-gradient-to-position);
+}
+
+html.dark input,
+html.dark select,
+html.dark textarea {
+  color-scheme: dark;
+}

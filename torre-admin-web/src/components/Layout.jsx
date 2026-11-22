@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
+import ThemeToggle from './ThemeToggle';
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
@@ -37,7 +38,7 @@ export default function Layout({ children }) {
     .toUpperCase();
 
   const navLinkClass = ({ isActive }) =>
-    `px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+    `px-3 py-1.5 rounded-lg text-center text-sm font-medium border transition-colors ${
       isActive
         ? 'bg-blue-50 border-blue-200 text-blue-700'
         : 'border-transparent text-slate-600 hover:text-slate-800 hover:bg-slate-50 hover:border-slate-200'
@@ -81,6 +82,7 @@ export default function Layout({ children }) {
 
           {/* Derecha: campana + menú usuario */}
           <div className="flex items-center gap-1.5 sm:gap-2">
+            <ThemeToggle />
             <NotificationBell />
 
             <div className="relative" ref={menuRef}>
@@ -133,7 +135,10 @@ export default function Layout({ children }) {
           </div>
         </div>
         {isAdmin && (
-          <nav className="md:hidden border-t border-slate-100 px-3 py-2 grid grid-cols-3 gap-1.5 bg-white">
+          <nav
+            aria-label="Navegación de administración"
+            className="md:hidden border-t border-slate-100 px-3 py-2 grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-white"
+          >
             <NavLink to="/admin" end className={navLinkClass}>
               Períodos
             </NavLink>
@@ -142,6 +147,9 @@ export default function Layout({ children }) {
             </NavLink>
             <NavLink to="/admin/residents" className={navLinkClass}>
               Residentes
+            </NavLink>
+            <NavLink to="/admin/report" className={navLinkClass}>
+              Reportes
             </NavLink>
           </nav>
         )}

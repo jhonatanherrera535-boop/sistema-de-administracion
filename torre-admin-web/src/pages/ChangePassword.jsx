@@ -4,6 +4,7 @@ import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import StatusCard from '../components/ui/StatusCard';
+import ThemeToggle from '../components/ThemeToggle';
 
 export default function ChangePassword() {
   const { user, refreshUser } = useAuth();
@@ -53,7 +54,8 @@ export default function ChangePassword() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
+    <div className="relative min-h-screen bg-slate-100 flex items-center justify-center p-6">
+      <ThemeToggle className="absolute right-4 top-4" />
       <form
         onSubmit={handleSubmit}
         className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full"

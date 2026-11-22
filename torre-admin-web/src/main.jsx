@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter, useNavigate } from 'react-router-dom'
 import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext'
+import { ThemeProvider } from './context/ThemeContext'
 import { registerServiceWorker } from './utils/push'
 import './index.css'
 
@@ -28,10 +29,12 @@ function SwMessageListener() {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
-      <AuthProvider>
-        <SwMessageListener />
-        <App />
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <SwMessageListener />
+          <App />
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   </React.StrictMode>,
 )
